@@ -1,0 +1,327 @@
+---
+title: "Brand Mapping Insights"
+author: "Wondimu Ahmed, Ph.D."
+date: "07-15-2023"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = "", echo = FALSE, warning = FALSE)
+```
+
+# Project Overview
+
+
+A survey software company (hereafter Brand C) sought to assess its market position relative to four key competitors and to evaluate consumer perceptions of eight key attributes in relation to the brand. Particular emphasis was placed on *Ease of Use*, *Data Security*, and *Data Integration*, as these attributes have been central to recent product development and marketing efforts. 
+
+Thus, this project aimed to:
+
+- **Assess how Brand C is perceived relative to its competitors.**
+- **Identify key strengths and areas for improvement across core attributes, with a focus on strategic priorities.**
+
+
+```{r load library,  echo=FALSE, include=FALSE}
+library(pacman)
+pacman::p_load(haven, ggplot2, dplyr, plotly, flextable, sjlabelled, FactoMineR, factoextra, vcd, chisq.posthoc.test, anacor, ca, tibble, gplots, ggpubr, qcc, CAinterprTools, rgl, corrplot, lubridate, DT, ggforce, plotly, ggrepel)
+```
+
+# Data Source
+
+
+The data for this project was collected through a survey administered by Brand C’s research team. The sample comprised 5102 respondents recruited through an online panel. The respondents rated the **five** competing brands across **eight** key attributes: _Ease of Use_, _Data Security_, _Integration_, _Data Analysis_, _Real-Time Reporting_, _Cost-Effectiveness_, _Collaboration_, and _Customization_. 
+
+**Data Structure**
+
+- **Rows**: Brands (Brand A, Brand B, Brand C, Brand D & Brand E).
+- **Columns**: Attributes (Ease of Use, Customization, etc.).
+- **Values**: Count of respondents associating each attribute with a specific brand.
+
+
+
+```{r load_and_inspect_data, echo=FALSE, message=FALSE, include=FALSE}
+brand_data<- read.csv("my_brand_data_new.csv") # Load brand dataset and inspect dimensions & brand distribution
+dim(brand_data)
+table(brand_data$Brand)
+```
+
+# Data Preparation 
+
+Brand C's research team initially removed rows with nonsensical responses before sharing the dataset. Upon receipt, we performed a detailed inspection for missing data, inconsistencies, and anomalies. Speeders—participants who completed the survey unrealistically fast—were identified and removed [see Zhang & Conrad, 2014](https://doi.org/10.18148/srm/2014.v8i2.5453). After cleaning the data, 4,809 valid responses remained for analysis. We then created a contingency table representing the joint frequency distribution of brands and attributes. This table served as the primary input for Correspondence Analysis. The balloon plot below visualizes these relationships. Among others, the plot shows that:
+
+- **Brand E**  is the market leader.
+- **Brand A**  is an emerging competitor.
+
+```{r, convert_date_to_POSIX_format, echo=FALSE,message=FALSE, include=FALSE}
+# Convert start and end timestamps, calculate survey completion time, flag speeders or unusually slow respondents, and filter valid responses.
+# Convert date columns to POSIX format and calculate time taken in minutes
+
+brand_data$StartDate<- mdy_hm(brand_data$StartDate)
+brand_data$EndDate<- mdy_hm(brand_data$EndDate)
+brand_data$EndDate1<- as.POSIXlt(brand_data$EndDate,format="%M/%D/%Y %H:%M:%S",tz=Sys.timezone())
+str(brand_data$EndDate1)
+brand_data$StartDate1<-as.POSIXlt(brand_data$StartDate,format="%m/%d/%Y %H:%M:%S",tz=Sys.timezone())
+brand_data$TimeTaken<- difftime(brand_data$EndDate1, brand_data$StartDate1, units="mins")
+```
+
+
+```{r visualize_evaluate_comp_time_distribution, echo=FALSE, include=FALSE}
+density_plot1 <- density(as.numeric(brand_data$TimeTaken))
+plot(density_plot1, main="Kernel Density")
+polygon(density_plot1, col="red", border="blue")
+
+hist(as.numeric(brand_data$TimeTaken)) 
+fivenum(as.numeric(brand_data$TimeTaken))
+
+```
+
+
+```{r categorize_response_speed_filter_valid_responses, echo=FALSE, include=FALSE}
+# Categorize response speed and filter valid responses (between 4 and 120 minutes)
+
+# If we set speeding threshold at 300 milliseconds per word [Zhang & Conrad, 2014] and given the survey has 3190 words[ 3190 * 0.3 seconds = 957 seconds [15.95 minutes]. So, it would take roughly 16 minutes to read through the entire survey. See Zhang, C., & Conrad, F. (2014, July). Speeding in web surveys: The tendency to answer very fast and its association with straightlining. In Survey research methods (Vol. 8, No. 2, pp. 127-135). Thus, 4 minute was taken as the lower threshold. The client was also consulted on this issue.  
+
+# Set thresholds
+min_time <- 4 # Minimum time in minutes
+max_time <- 120  # Maximum time in minutes
+
+# Flag and filter valid responses
+brand_data <- brand_data %>%
+  mutate(Flag = case_when(
+    TimeTaken < min_time ~ "Fast",
+    TimeTaken > max_time ~ "Too Slow",
+    TRUE ~ "Valid"
+  )) %>%
+  filter(Flag == "Valid")
+dim(brand_data )
+
+density_plot2 <- density(as.numeric(brand_data$TimeTaken))
+plot(density_plot2, main="Kernel Density")
+polygon(density_plot2, col="red", border="blue")
+dim(brand_data)
+```
+
+
+
+
+```{r, create_brand-attribute_contingency_table, echo=FALSE}
+# create a contingency table using dplyr
+my_table <- brand_data %>%
+  group_by(Brand) %>%
+  summarize(across(c(item_1, item_2, item_3, item_4, item_5, item_6, item_7, item_8), sum, na.rm = TRUE)) 
+
+# Rename cols using descriptive names 
+brand_att_data <- my_table %>% rename(
+'Ease of Use'=item_1,
+'Data Security'=item_2,
+'Integration'=item_3,
+'Data Analysis'=item_4,
+'Real-Time Reporting'=item_5,
+'Cost-Effectiveness'=item_6,
+'Collaboration'=item_7,
+'Customization'=item_8)
+brand_col<- brand_att_data
+
+# Modify the Brand column by renaming specific values. 
+brand_att_data <- brand_att_data %>%
+     mutate(Brand = recode(Brand, BrandA = 'Brand A', BrandB = 'Brand B',BrandC = 'Brand C',BrandD = 'Brand D',BrandE = 'Brand E'))
+
+# Brand" column is removed,  its values become the row names, matrxi format
+brand_att_data <- brand_att_data %>% column_to_rownames(var = "Brand") 
+
+# datatable(brand_att_data)
+          
+```
+
+
+ 
+
+```{r  Brand-attribute_contingency_table_vizualization, echo=FALSE}
+
+# Brand-Attribute Contingency Table Visualization
+color_palette <- c("#0D0887FF", "#6A00A8FF", "#B12A90FF", "#E16462FF", "#FCA636FF", "#F0F921FF")
+ggballoonplot(brand_att_data, fill = "value",main="" )+
+   scale_fill_gradientn(colors = color_palette) 
+```
+
+# Data Analysis
+
+ 
+[Correspondence Analysis](https://doi.org/10.1201/9781315369983) was conducted to examine relationships between brands and attributes. This statistical method identifies patterns in brand-attribute associations thereby revealing key differentiation points within the competitive landscape. The results showed that two main dimensions explained 96.62% of the variation, meaning they capture nearly all important brand-attribute patterns. [Malinvaud’s test](https://CRAN.R-project.org/package=CAinterprTools) was applied to determine the optimal number of dimensions to retain. The results confirmed that the first two dimensions were sufficient for meaningful interpretation. The resulting perceptual map is shown below in the Insights Summary section to support interpretation. 
+
+```{r chisq_test, results='hide', echo=FALSE}
+ #Perform Chi-square test of independence on brand-attribute matrix
+ my_chisq_test <- chisq.test(brand_att_data, correct = FALSE)
+
+# library(corrplot) # using corrplot function, one can visualize standardized residuals
+# corrplot( my_chisq_test$residuals, is.cor = FALSE)
+
+```
+
+
+
+
+
+```{r perform_CA, echo=FALSE,results='hide',fig.show='hide',message=FALSE }
+# Perform Correspondence Analysis using CA function from CA package 
+brand_ca <- CA(brand_att_data, ncp = 5, graph = FALSE)
+```
+
+
+```{r determine_numberof_dimensions_retain_Malinvaud_test, echo=FALSE, include=FALSE}
+#Assess the number of dimensions to retain in CA using Malinvaud’s test  and evaluate overall inertia, row/column correlations, and quality of representation.
+malinvaud(brand_att_data)
+sig.tot.inertia.perm(brand_att_data)
+rows.corr.scatter(brand_att_data)
+cols.corr.scatter(brand_att_data)
+rows.qlt(brand_att_data, 1, 2)
+```
+
+```{r create_biplot, echo=FALSE,results='hide',fig.show='hide',message=FALSE }
+# Create a perceptual map to visualize brand-attribute relationships.
+Brand_Perceptions_plot1 <-  plot.CA(brand_ca,map="symbiplot", repel = TRUE, arrows = c(TRUE, FALSE)) + labs(title = "Perceptual Map of Survey Software Brands" ) 
+Brand_Perceptions_plot1
+
+# Additional visualization using "caPercept" 
+# "This command allows to plot a variant of the traditional Correspondence Analysis scatterplots that allows facilitating the interpretation of the results. It aims at producing what in marketing research is called perceptual map, a visual representation of the CA results that seeks to avoid the problem of interpreting inter-spatial distance. It represents only one type of points (say, column points), and "gives names to the axes" corresponding to the major row category contributors to the two selected dimensions".Source: https://www.rdocumentation.org/packages/CAinterprTools/versions/1.1.0/topics/caPercept
+
+#caPercept(brand_att_data,1,2,focus="col",dim.corr=1, guide=TRUE)
+```
+
+
+ 
+
+```{r, draw_confidence_ellipses,  echo=FALSE}
+# Draw confidence ellipses for rows and columns, not used for the report. 
+# ellipseCA(brand_ca,  col.row.ell = "green",col.col.ell =  "transparent")
+```
+
+
+
+
+
+
+```{r row_principal_normalization_plot, fig.show='hide', echo=FALSE}
+# This uses row-principal normalization. Row points (brands in our case ) are plotted in principal coordinates.
+# Column points (attributes) are plotted in coordinates that preserve the chi-square distances from the row. 
+fviz_ca_biplot(brand_ca, 
+               map ="rowprincipal", arrow = c(TRUE, TRUE),
+               repel = TRUE)
+```
+
+
+
+
+# Insights Summary
+
+
+## **Brand C’s Market Position**
+
+**Brand C** is positioned in the top left quadrant of the perceptual map. It is closely associated with _Data Analysis_, _Data Security_, and _Integration_, as shown by its proximity to these attributes. This indicates that consumers perceive Brand C as a secure, technically robust platform with strong analytical capabilities. However, it is further from features such as _Ease of Use_, _Customization_, and _Cost-Effectiveness_, suggesting it may be perceived as less user-friendly or value-driven compared to other brands.
+
+
+
+```{r brand_perceptions_plot, echo=FALSE}
+Brand_Perceptions_plot <- fviz_ca_biplot(
+  brand_ca,
+  col.col="black",
+  map="symmetric",
+  repel=TRUE,
+  labelsize=3
+) +
+labs(
+  title= "Perceptual Map of Survey Software Brands",
+  caption=""
+) +
+theme(
+  plot.title=element_text(face="bold", size=12, hjust=0.5),
+  plot.caption=element_text(color="black", face="italic")
+) +
+geom_point(shape=23, fill="blue", size=2) +
+xlim(-0.3, 0.45) +
+ylim(-0.3, 0.45) +
+geom_circle(
+  aes(x0=-0.18, y0=-0.01, r=0.12),
+  inherit.aes=FALSE,
+  color="green",
+  linetype="dotted",
+  ace="bold",
+  size=1
+)
+
+Brand_Perceptions_plot
+
+```
+
+[A mosaic plot](https://CRAN.R-project.org/package=vcd.) was generated to complement the Correspondence Analysis by highlighting the strength and direction of brand-attribute relationships. This visualization helps validate and interpret the perceptual map by showing which brand-feature combinations occur more or less often than expected.
+
+- **_Larger rectangles_** indicate more frequent brand-feature pairings.
+
+- **_Blue shading_** shows positive associations (brand-attribute combinations appear more often than expected), while **_red shading_** shows negative associations (brand-attribute combinations appear less often than expected).
+
+
+
+The mosaic plot shows that **Brand C** is positively associated with _Data Analysis_, _Data Security_, and _Integration_, indicating that consumers recognize its strengths in these areas. However, it is negatively associated with _Cost-Effectiveness_, _Ease of Use_, and _Collaboration_, suggesting that it is perceived as expensive, less user-friendly, and perhaps not ideal for teamwork.
+
+
+
+```{r, create_mosaic_plot_brand_attribute, echo=FALSE, results='hide', fig.show='hide', message=FALSE }
+# Create a mosaic plot to visualize the association between brands and attributes.
+vcd_data<- as.table(as.matrix(brand_att_data))
+vcd_data<-t(vcd_data) # We need to transpose the matrix to show attributes on the x-axis and brands on the y-axis
+mosaicplot(vcd_data,  las=2,shade = TRUE,  main = "Brand-Attribute Associations")
+
+```
+
+
+```{r, create_Enhanced_mosaic_plot_brand_attribute, echo=FALSE}
+
+# Enhanced mosaic plot using Friendly shading to interpret brand-attribute associations.Labels and orientation are  adjusted for improved readability
+
+my_labels <- list(set_varnames=list(A="", B=" "))
+
+my_mosaic_plot<- mosaic(vcd_data, gp = shading_Friendly, 
+            split_vertical = TRUE, 
+            main=" ",
+            labeling_args=my_labels,
+            legend=FALSE, 
+            rot_labels=c(30,0,0,0),
+            just_labels = c("left",  "center",  "center",  "right")
+       )
+```
+
+## **Competitive Landscape**
+
+Both the perceptual map and the mosaic plot show that: 
+
+- **Brand E** is seen as intuitive and user-friendly.
+
+- **Both Brand B** and **Brand D** are positively associated with _Cost-Effectiveness_, indicating that they are perceived as budget-friendly options in the market
+
+- **Brand A** and **Brand E** are more aligned with attributes like _Ease of Use_, _Collaboration_, and _Customization_, suggesting that they may be viewed as more user-friendly and adaptable compared to **Brand C**.
+
+
+
+# Recommendations
+
+- **Emphasize** Brand C’s strengths in trust, compliance, and advanced analytics to reinforce its leadership in this space.
+- **Explore** value-based pricing strategies or marketing campaigns that communicate long-term ROI.
+- **Improve** the user experience through a simplified interface and a better onboarding strategy to shift perceptions around usability.
+- **Make** _Data Security & Analytics_ your unique selling proposition and reinforce it in all branding and marketing efforts.
+
+*Note: These recommendations were developed in consultation with Brand C’s research team
+
+
+# References 
+
+Alberti, G. (2020). _CAinterprTools_: Graphical Aid in Correspondence Analysis Interpretation and Significance Testings. R package version 1.1.0,
+  <https://CRAN.R-project.org/package=CAinterprTools>.
+  
+Beh, E.J., D’Ambra, L.(2009). Some Interpretative Tools for Non-Symmetrical Correspondence Analysis. _Journal of Classification_, 26, 55–76 (2009). <https://doi.org/10.1007/s00357-009-9025-0>
+
+Greenacre, M. (2017). _Correspondence Analysis in Practice (3rd ed.)._ Chapman and Hall/CRC.<https://doi.org/10.1201/9781315369983>
+
+Meyer, D., Zeileis A., Hornik K., Friendly, M. (2024). _VCD: Visualizing Categorical Data._ R package version 1.4-13, <https://CRAN.R-project.org/package=vcd>.
+
+Zhang, C., & Conrad, F. (2014). Speeding in web surveys: The tendency to answer very fast and its association with straightlining. _Survey Research Methods_ 8,2, 127-135. <https://doi.org/10.18148/srm/2014.v8i2.5453>
+
