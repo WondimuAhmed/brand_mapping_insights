@@ -50,13 +50,13 @@ time (speeding detection) & Chi-Square Test of Independence
 
 ## How to Run
 
-- Place my_brand_data in your working directory.
-- Open the .Rmd file in RStudio.
-- Install the required packages: if (!require(“pacman”))
+-  Place my_brand_data in your working directory.
+-  Open the .Rmd file in RStudio.
+-  Install the required packages: if (!require(“pacman”))
 install.packages(“pacman”) pacman::p_load(haven, ggplot2, dplyr, plotly,
 flextable, sjlabelled, FactoMineR, factoextra, vcd, chisq.posthoc.test,
 anacor, ca, tibble, gplots, ggpubr, qcc, CAinterprTools, rgl, corrplot,
 lubridate, DT, ggforce, ggrepel)
-- Knit the .Rmd file to view the final
+-  Knit the .Rmd file to view the final
 report in HTML format.
-- Custom css file for rendering the html page 
+-  Custom css file for rendering the html page 
