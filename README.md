@@ -23,12 +23,13 @@ DT, flextable, sjlabelled
 
 ## Analytic Approach:
 
-Data Cleaning Descriptive Insights Correspondence Analysis Malinvaud’s
-Test for optimal dimension retention Mosaic Plots to validate
+Data Cleaning, Descriptive Insights, Correspondence Analysis, Malinvaud’s
+Test for optimal dimension retention, Mosaic Plots to validate
 brand-attribute associations
 
-\##Data: N = 4,102 initial respondents Final N = 3,809 after filtering
-for quality and response time Respondents rated 5 brands across 8
+## Data
+4,102 initial respondents & 3,809 after filtering
+for quality and response time; Respondents rated 5 brands across 8
 product attributes
 
 ## Key Findings
@@ -43,17 +44,19 @@ product attributes
 
 ## Visual Outputs
 
-Perceptual Maps Mosaic Plots with Friendly shading Balloon Plot to
-visualize attribute frequency by brand Kernel Density Plots for response
-time (speeding detection) Chi-Square Test of Independence
+Perceptual Maps Mosaic Plots with Friendly shading, Balloon Plot to
+visualize attribute frequency by brand, Kernel Density Plots for response
+time (speeding detection) & Chi-Square Test of Independence
 
 ## How to Run
 
-Place my_brand_data in your working directory. Open the .Rmd file in
-RStudio. Install the required packages: if (!require(“pacman”))
+- Place my_brand_data in your working directory.
+- Open the .Rmd file in RStudio.
+- Install the required packages: if (!require(“pacman”))
 install.packages(“pacman”) pacman::p_load(haven, ggplot2, dplyr, plotly,
 flextable, sjlabelled, FactoMineR, factoextra, vcd, chisq.posthoc.test,
 anacor, ca, tibble, gplots, ggpubr, qcc, CAinterprTools, rgl, corrplot,
-lubridate, DT, ggforce, ggrepel) Knit the .Rmd file to view the final
-report in HTML format.Custom css file for rendering the html page not
-included.
+lubridate, DT, ggforce, ggrepel)
+- Knit the .Rmd file to view the final
+report in HTML format.
+- Custom css file for rendering the html page 
