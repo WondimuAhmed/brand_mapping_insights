@@ -3,7 +3,7 @@
 
 # Brand Perception Mapping with Correspondence Analysis
 
-This project was conducted for a survey software company (Brand C) to
+[This project](https://wondimuahmed.github.io/brand_mapping_insights/) was conducted for a survey software company (Brand C) to
 evaluate its market position relative to four competitors. Using
 perception data from over 5,000 survey respondents, we explored how each
 brand is associated with key product attributes.
